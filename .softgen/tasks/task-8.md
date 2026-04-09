@@ -1,25 +1,23 @@
 ---
 title: RSS Feeds & Settings
-status: todo
+status: in_progress
 priority: low
 type: feature
-tags: [rss, settings, subscription]
+tags: [rss, settings, stripe]
 created_by: agent
 created_at: 2026-04-09T11:43:29Z
 position: 8
 ---
 
 ## Notes
-RSS feed management (Pro plan only). Add feed URL, auto-monitor for new posts. Settings page for account info, subscription management (Stripe portal), preferences.
+Pro users can add RSS feeds to auto-monitor blogs. Settings page shows account info, subscription management via Stripe Customer Portal, and usage stats.
 
 ## Checklist
-- [ ] Create /feeds page: list of RSS feeds with site name, last checked, active toggle, delete button, "Add Feed" form (Pro plan gate)
-- [ ] Create API route /api/feeds/add: validate RSS URL, save to database
-- [ ] Create API route /api/feeds/check: cron job checks feeds for new posts, auto-generates content
-- [ ] Create /settings page: tabs for Account, Subscription, Preferences
-- [ ] Account tab: display name, email, password change form
-- [ ] Subscription tab: current plan badge, usage stats, "Manage Subscription" button (opens Stripe portal), upgrade/downgrade cards
-- [ ] Preferences tab: default brand voice selector, notification preferences, timezone
-- [ ] Create API route /api/stripe/create-checkout: Stripe Checkout session for upgrades
-- [ ] Create API route /api/stripe/portal: Stripe Customer Portal session
+- [ ] Create /feeds page: list of active feeds, add feed form (URL + voice selector), last checked timestamp, Pro-only guard with upgrade prompt
+- [ ] Create API route /api/feeds/add: validates RSS URL, saves to rss_feeds table
+- [ ] Create API route /api/feeds/delete: remove feed
+- [x] Create /settings page with tabs: Account (edit name, view email, usage stats), Subscription (current plan, upgrade options, manage button → Stripe portal), Preferences (placeholder for notifications)
+- [ ] Integrate Stripe: install @stripe/stripe-js, create API routes /api/stripe/create-checkout, /api/stripe/create-portal, /api/stripe/webhook
+- [ ] Add Stripe checkout flow: user selects plan → redirects to Stripe → webhook updates subscription_tier
+- [ ] Add Customer Portal session: user clicks "Manage" → redirects to Stripe portal for cancel/upgrade
 - [ ] Create API route /api/stripe/webhook: handle subscription events
