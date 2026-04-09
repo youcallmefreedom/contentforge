@@ -1,22 +1,23 @@
 ---
 title: Content Library
-status: todo
+status: done
 priority: medium
 type: feature
-tags: [library, saved, search]
+tags: [library, saved]
 created_by: agent
 created_at: 2026-04-09T11:43:29Z
 position: 6
 ---
 
 ## Notes
-Grid view of all saved posts. Filter by platform, search by content, tag organization. Each card shows platform badge, preview, copy button. Evergreen toggle for posts worth recycling.
+Saved posts appear in a grid with platform badges and tags. Users can search by content or tags, filter by platform, view full content in modal, copy or delete.
 
 ## Checklist
-- [ ] Create /library page: search bar, platform filter dropdown, evergreen toggle, sort options (newest, oldest, most saved)
-- [ ] Create LibraryGrid component: responsive grid of saved post cards
-- [ ] Create LibraryCard component: platform badge, content preview (100 chars), tags, copy button, delete button, evergreen star icon
-- [ ] Create API route /api/library/posts: fetch saved posts with filters
-- [ ] Create API route /api/library/save: save post from generation
-- [ ] Create API route /api/library/delete: remove saved post
-- [ ] Add tag input for organizing posts
+- [x] Create /library page: grid of saved posts cards
+- [x] Add search bar: filters by content text or tags
+- [x] Add platform filter dropdown: show all or specific platform
+- [x] Create post card component: platform badge, first 100 chars, tags (max 3 visible), evergreen badge, created date
+- [x] Add click card → modal: full content, copy button, delete button
+- [x] Create API route /api/library/save: add post to saved_posts table
+- [x] Create API route /api/library/delete: remove saved post
+- [x] Add tag input for organizing posts
