@@ -6,6 +6,35 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY || "",
 });
 
+// Retry helper for 529 overloaded errors
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries = 3,
+  delayMs = 5000
+): Promise<T> {
+  let lastError: any;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      lastError = error;
+      
+      // Check if it's a 529 overloaded error
+      if (error.status === 529 && attempt < maxRetries) {
+        console.log(`Anthropic API overloaded (529), retrying in ${delayMs}ms... (attempt ${attempt}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+        continue;
+      }
+      
+      // For non-529 errors or last attempt, throw immediately
+      throw error;
+    }
+  }
+  
+  throw lastError;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -213,16 +242,24 @@ ${inputContent}
 
 Generate all 7 platform-specific posts from this content. Return only the JSON array, no other text.`;
 
-    // Call Anthropic Claude API
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 4096,
-      messages: [
-        {
-          role: "user",
-          content: `${systemPrompt}\n\n${userPrompt}`,
-        },
-      ],
+    // Call Anthropic API with retry logic
+    const response = await retryWithBackoff(async () => {
+      return await anthropic.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 4000,
+        system: systemPrompt,
+        messages: [
+          {
+            role: "user",
+            content: userPrompt,
+          },
+        ],
+      });
+    });
+
+    console.log("Anthropic API Response:", {
+      model: response.model,
+      usage: response.usage,
     });
 
     const aiResponse = response.content[0].type === "text" ? response.content[0].text : "";
