@@ -3,78 +3,173 @@ import { useRouter } from "next/router";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import { SEO } from "@/components/SEO";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import {
-  Sparkles,
-  Calendar,
-  Library,
-  TrendingUp,
-  ArrowRight,
-  Clock,
-} from "lucide-react";
-import Link from "next/link";
+import { Progress } from "@/components/ui/progress";
+import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import Link from "next/link";
+import { 
+  TrendingUp, 
+  Calendar, 
+  Sparkles, 
+  Twitter, 
+  Linkedin, 
+  Instagram, 
+  Facebook, 
+  Mail, 
+  Youtube,
+  Presentation,
+  Clock,
+  HelpCircle
+} from "lucide-react";
+import Joyride, { CallBackProps, STATUS, Step } from "react-joyride";
 
 type GenerationSummary = {
   id: string;
   input_title: string;
+  outputs: any[];
   created_at: string;
-  outputs: Array<{ platform: string; content_score: number }>;
+};
+
+const platformIcons = {
+  twitter: Twitter,
+  linkedin: Linkedin,
+  linkedin_carousel: Presentation,
+  instagram: Instagram,
+  facebook: Facebook,
+  newsletter: Mail,
+  youtube_shorts: Youtube,
+};
+
+const platformColors = {
+  twitter: "bg-sky-100 text-sky-700 border-sky-300",
+  linkedin: "bg-blue-100 text-blue-700 border-blue-300",
+  linkedin_carousel: "bg-blue-100 text-blue-700 border-blue-300",
+  instagram: "bg-pink-100 text-pink-700 border-pink-300",
+  facebook: "bg-blue-100 text-blue-800 border-blue-300",
+  newsletter: "bg-purple-100 text-purple-700 border-purple-300",
+  youtube_shorts: "bg-red-100 text-red-700 border-red-300",
 };
 
 export default function Dashboard() {
-  const { user, profile, loading } = useAuth();
   const router = useRouter();
-  const [recentGenerations, setRecentGenerations] = useState<GenerationSummary[]>([]);
+  const { user, profile, loading: authLoading } = useAuth();
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalGenerations: 0,
-    thisMonth: 0,
     avgScore: 0,
+    thisMonth: 0,
   });
+  const [recentGenerations, setRecentGenerations] = useState<GenerationSummary[]>([]);
+  const [runTour, setRunTour] = useState(false);
+  const [tourCompleted, setTourCompleted] = useState(false);
+
+  const tourSteps: Step[] = [
+    {
+      target: ".tour-welcome",
+      content: "Welcome to ContentForge! Let's take a quick tour of your dashboard.",
+      placement: "center",
+      disableBeacon: true,
+    },
+    {
+      target: ".tour-stats",
+      content: "Track your content performance here. See total generations, average engagement scores, and this month's activity.",
+      placement: "bottom",
+    },
+    {
+      target: ".tour-usage",
+      content: "Monitor your monthly usage. Upgrade your plan if you need more repurposes.",
+      placement: "bottom",
+    },
+    {
+      target: ".tour-quick-actions",
+      content: "Quick access to key features: Generate new content, view your calendar, or browse your saved library.",
+      placement: "bottom",
+    },
+    {
+      target: ".tour-recent",
+      content: "Your recent generations appear here. Click any item to view the full repurposed content.",
+      placement: "top",
+    },
+  ];
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!authLoading && !user) {
       router.push("/login");
     }
-  }, [user, loading, router]);
+  }, [user, authLoading, router]);
 
   useEffect(() => {
     if (user) {
       fetchDashboardData();
+      checkTourStatus();
     }
   }, [user]);
 
+  const checkTourStatus = () => {
+    const completed = localStorage.getItem("contentforge_tour_completed");
+    if (!completed) {
+      setTimeout(() => setRunTour(true), 500);
+    } else {
+      setTourCompleted(true);
+    }
+  };
+
+  const handleJoyrideCallback = (data: CallBackProps) => {
+    const { status } = data;
+    const finishedStatuses: string[] = [STATUS.FINISHED, STATUS.SKIPPED];
+
+    if (finishedStatuses.includes(status)) {
+      setRunTour(false);
+      localStorage.setItem("contentforge_tour_completed", "true");
+      setTourCompleted(true);
+    }
+  };
+
+  const restartTour = () => {
+    setRunTour(true);
+  };
+
   const fetchDashboardData = async () => {
-    if (!user) return;
+    try {
+      const { data: generations, error } = await supabase
+        .from("generations")
+        .select("id, input_title, outputs, content_scores, created_at")
+        .eq("user_id", user?.id)
+        .order("created_at", { ascending: false })
+        .limit(5);
 
-    const { data: generations } = await supabase
-      .from("generations")
-      .select("id, input_title, created_at, outputs")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(5);
+      if (generations) {
+        setRecentGenerations(generations as unknown as GenerationSummary[]);
 
-    if (generations) {
-      setRecentGenerations(generations as unknown as GenerationSummary[]);
+        const total = generations.length;
+        const scores = generations
+          .flatMap((g: any) => {
+            const outputs = g.outputs || [];
+            return outputs.map((o: any) => o.content_score || 0);
+          })
+          .filter((s: number) => s > 0);
 
-      const total = generations.length;
-      const thisMonth = generations.filter((g) => {
-        const date = new Date(g.created_at);
+        const avgScore = scores.length > 0
+          ? Math.round(scores.reduce((a: number, b: number) => a + b, 0) / scores.length)
+          : 0;
+
         const now = new Date();
-        return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
-      }).length;
+        const thisMonth = generations.filter((g: any) => {
+          const createdAt = new Date(g.created_at);
+          return createdAt.getMonth() === now.getMonth() && 
+                 createdAt.getFullYear() === now.getFullYear();
+        }).length;
 
-      const allScores = generations.flatMap((g) =>
-        Array.isArray(g.outputs) ? g.outputs.map((o: any) => o.content_score || 0) : []
-      );
-      const avgScore = allScores.length > 0
-        ? Math.round(allScores.reduce((a, b) => a + b, 0) / allScores.length)
-        : 0;
-
-      setStats({ totalGenerations: total, thisMonth, avgScore });
+        setStats({ totalGenerations: total, avgScore, thisMonth });
+      }
+    } catch (error: any) {
+      console.error("Error fetching dashboard data:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -93,67 +188,103 @@ export default function Dashboard() {
   const usage = (profile as any).monthly_generations || 0;
   const usagePercent = limit === 999999 ? 0 : (usage / limit) * 100;
 
+  const firstName = profile.full_name?.split(" ")[0] || "there";
+
   return (
     <AppLayout>
-      <SEO title="Dashboard - ContentForge" />
+      <SEO title="Dashboard — ContentForge" />
+      
+      <Joyride
+        steps={tourSteps}
+        run={runTour}
+        continuous
+        showSkipButton
+        showProgress
+        callback={handleJoyrideCallback}
+        styles={{
+          options: {
+            primaryColor: "#0d9488",
+            zIndex: 10000,
+          },
+          tooltip: {
+            fontSize: 16,
+            padding: 20,
+          },
+          buttonNext: {
+            backgroundColor: "#0d9488",
+            fontSize: 14,
+            padding: "8px 16px",
+          },
+          buttonBack: {
+            color: "#64748b",
+            fontSize: 14,
+          },
+        }}
+      />
 
-      <div className="space-y-8">
-        {/* Header */}
-        <div>
-          <h1 className="text-3xl font-heading font-bold">
-            Welcome back, {profile.full_name?.split(" ")[0] || "there"}!
-          </h1>
-          <p className="text-muted-foreground mt-2">
-            Ready to turn your content into a week of social posts?
-          </p>
+      <div className="container py-8 space-y-8 tour-welcome">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="font-heading text-3xl font-bold">Welcome back, {firstName}! 👋</h1>
+            <p className="text-muted-foreground mt-1">
+              Here's what's happening with your content
+            </p>
+          </div>
+          {tourCompleted && (
+            <Button variant="outline" size="sm" onClick={restartTour}>
+              <HelpCircle className="h-4 w-4 mr-2" />
+              Restart Tour
+            </Button>
+          )}
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Sparkles className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Generations</p>
-                <p className="text-2xl font-heading font-bold">{stats.totalGenerations}</p>
-              </div>
-            </div>
+        <div className="grid md:grid-cols-3 gap-6 tour-stats">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Total Generations</CardTitle>
+              <Sparkles className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.totalGenerations}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                All time repurposes
+              </p>
+            </CardContent>
           </Card>
 
-          <Card className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-lg bg-accent/10 flex items-center justify-center">
-                <TrendingUp className="h-6 w-6 text-accent" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Avg Content Score</p>
-                <p className="text-2xl font-heading font-bold">{stats.avgScore}/10</p>
-              </div>
-            </div>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Avg Content Score</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.avgScore}/10</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Predicted engagement
+              </p>
+            </CardContent>
           </Card>
 
-          <Card className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-lg bg-purple-100 flex items-center justify-center">
-                <Calendar className="h-6 w-6 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">This Month</p>
-                <p className="text-2xl font-heading font-bold">{stats.thisMonth}</p>
-              </div>
-            </div>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">This Month</CardTitle>
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.thisMonth}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Repurposes created
+              </p>
+            </CardContent>
           </Card>
         </div>
 
-        {/* Usage Meter */}
-        <Card className="p-6">
-          <div className="space-y-3">
+        <Card className="tour-usage">
+          <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-heading font-semibold">Usage This Month</p>
-                <p className="text-sm text-muted-foreground">
+                <CardTitle>Usage This Month</CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
                   {usage} of {limit === 999999 ? "unlimited" : limit} repurposes
                 </p>
               </div>
@@ -165,124 +296,144 @@ export default function Dashboard() {
                 </Link>
               )}
             </div>
-            {limit !== 999999 && <Progress value={usagePercent} className="h-2" />}
-          </div>
+          </CardHeader>
+          <CardContent>
+            <Progress value={usagePercent} className="h-2" />
+            {(profile as any).subscription_tier === "free" && usage >= limit && (
+              <p className="text-sm text-destructive mt-2">
+                You've reached your monthly limit. Upgrade to continue creating content.
+              </p>
+            )}
+          </CardContent>
         </Card>
 
-        {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Link href="/generate">
-            <Card className="p-6 hover:border-primary/50 transition-colors cursor-pointer h-full">
-              <div className="space-y-3">
-                <div className="w-12 h-12 rounded-lg bg-primary flex items-center justify-center">
-                  <Sparkles className="h-6 w-6 text-primary-foreground" />
-                </div>
-                <div>
-                  <h3 className="font-heading font-semibold text-lg">New Repurpose</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Turn a blog post into 7 platform posts
-                  </p>
-                </div>
-                <ArrowRight className="h-5 w-5 text-primary" />
-              </div>
-            </Card>
-          </Link>
+        <div>
+          <h2 className="font-heading text-xl font-semibold mb-4">Quick Actions</h2>
+          <div className="grid md:grid-cols-3 gap-4 tour-quick-actions">
+            <Link href="/generate">
+              <Card className="hover:border-primary transition-colors cursor-pointer h-full">
+                <CardContent className="pt-6">
+                  <div className="flex items-center space-x-4">
+                    <div className="bg-primary/10 p-3 rounded-lg">
+                      <Sparkles className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">New Repurpose</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Turn a blog into 7 posts
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
 
-          <Link href="/calendar">
-            <Card className="p-6 hover:border-primary/50 transition-colors cursor-pointer h-full">
-              <div className="space-y-3">
-                <div className="w-12 h-12 rounded-lg bg-accent/10 flex items-center justify-center">
-                  <Calendar className="h-6 w-6 text-accent" />
-                </div>
-                <div>
-                  <h3 className="font-heading font-semibold text-lg">Content Calendar</h3>
-                  <p className="text-sm text-muted-foreground">
-                    View and plan your week
-                  </p>
-                </div>
-                <ArrowRight className="h-5 w-5 text-primary" />
-              </div>
-            </Card>
-          </Link>
+            <Link href="/calendar">
+              <Card className="hover:border-primary transition-colors cursor-pointer h-full">
+                <CardContent className="pt-6">
+                  <div className="flex items-center space-x-4">
+                    <div className="bg-accent/10 p-3 rounded-lg">
+                      <Calendar className="h-6 w-6 text-accent" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">Content Calendar</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Plan your week ahead
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
 
-          <Link href="/library">
-            <Card className="p-6 hover:border-primary/50 transition-colors cursor-pointer h-full">
-              <div className="space-y-3">
-                <div className="w-12 h-12 rounded-lg bg-purple-100 flex items-center justify-center">
-                  <Library className="h-6 w-6 text-purple-600" />
-                </div>
-                <div>
-                  <h3 className="font-heading font-semibold text-lg">Saved Library</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Browse your saved posts
-                  </p>
-                </div>
-                <ArrowRight className="h-5 w-5 text-primary" />
-              </div>
-            </Card>
-          </Link>
+            <Link href="/library">
+              <Card className="hover:border-primary transition-colors cursor-pointer h-full">
+                <CardContent className="pt-6">
+                  <div className="flex items-center space-x-4">
+                    <div className="bg-muted p-3 rounded-lg">
+                      <TrendingUp className="h-6 w-6 text-foreground" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">Saved Library</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Browse saved posts
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          </div>
         </div>
 
-        {/* Recent Generations */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-heading font-bold">Recent Generations</h2>
-            <Link href="/library">
-              <Button variant="ghost" size="sm">
+        <div className="tour-recent">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-heading text-xl font-semibold">Recent Generations</h2>
+            <Link href="/generate">
+              <Button variant="outline" size="sm">
                 View All
-                <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>
           </div>
 
           {recentGenerations.length === 0 ? (
-            <Card className="p-12 text-center">
-              <Sparkles className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No generations yet. Create your first one!</p>
-              <Link href="/generate">
-                <Button className="mt-4">
-                  Start Generating
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
+            <Card>
+              <CardContent className="py-12 text-center">
+                <Sparkles className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="font-semibold text-lg mb-2">No generations yet</h3>
+                <p className="text-muted-foreground mb-4">
+                  Create your first content repurpose to get started
+                </p>
+                <Link href="/generate">
+                  <Button>
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Create Your First Repurpose
+                  </Button>
+                </Link>
+              </CardContent>
             </Card>
           ) : (
             <div className="space-y-3">
               {recentGenerations.map((gen) => {
-                const avgScore = Array.isArray(gen.outputs)
-                  ? Math.round(
-                      gen.outputs.reduce((sum: number, o: any) => sum + (o.content_score || 0), 0) /
-                        gen.outputs.length
-                    )
-                  : 0;
-
+                const outputs = gen.outputs || [];
                 return (
-                  <Card key={gen.id} className="p-4 hover:border-primary/50 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4 flex-1 min-w-0">
-                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                          <Sparkles className="h-5 w-5 text-primary" />
-                        </div>
+                  <Card key={gen.id} className="hover:border-primary/50 transition-colors">
+                    <CardContent className="py-4">
+                      <div className="flex items-center justify-between">
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{gen.input_title}</p>
-                          <div className="flex items-center gap-3 mt-1">
-                            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                              <Clock className="h-3 w-3" />
-                              {new Date(gen.created_at).toLocaleDateString()}
-                            </div>
-                            <Badge variant="secondary" className="text-xs">
-                              Score: {avgScore}/10
-                            </Badge>
+                          <h3 className="font-semibold truncate mb-2">{gen.input_title}</h3>
+                          <div className="flex flex-wrap gap-2">
+                            {outputs.map((output: any, idx: number) => {
+                              const Icon = platformIcons[output.platform as keyof typeof platformIcons];
+                              const colorClass = platformColors[output.platform as keyof typeof platformColors];
+                              return (
+                                <Badge
+                                  key={idx}
+                                  variant="outline"
+                                  className={`${colorClass} border`}
+                                >
+                                  {Icon && <Icon className="h-3 w-3 mr-1" />}
+                                  {output.platform.replace("_", " ")}
+                                </Badge>
+                              );
+                            })}
                           </div>
                         </div>
+                        <div className="flex items-center space-x-4 ml-4">
+                          <div className="text-right">
+                            <div className="text-sm text-muted-foreground flex items-center">
+                              <Clock className="h-3 w-3 mr-1" />
+                              {new Date(gen.created_at).toLocaleDateString()}
+                            </div>
+                          </div>
+                          <Link href={`/generate?id=${gen.id}`}>
+                            <Button variant="outline" size="sm">
+                              View
+                            </Button>
+                          </Link>
+                        </div>
                       </div>
-                      <Link href={`/library?id=${gen.id}`}>
-                        <Button variant="ghost" size="sm">
-                          View
-                          <ArrowRight className="ml-2 h-4 w-4" />
-                        </Button>
-                      </Link>
-                    </div>
+                    </CardContent>
                   </Card>
                 );
               })}
