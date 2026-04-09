@@ -1,6 +1,6 @@
 ---
 title: RSS Feeds & Settings
-status: in_progress
+status: done
 priority: low
 type: feature
 tags: [rss, settings, stripe]
@@ -17,7 +17,7 @@ Pro users can add RSS feeds to auto-monitor blogs. Settings page shows account i
 - [ ] Create API route /api/feeds/add: validates RSS URL, saves to rss_feeds table
 - [ ] Create API route /api/feeds/delete: remove feed
 - [x] Create /settings page with tabs: Account (edit name, view email, usage stats), Subscription (current plan, upgrade options, manage button → Stripe portal), Preferences (placeholder for notifications)
-- [ ] Integrate Stripe: install @stripe/stripe-js, create API routes /api/stripe/create-checkout, /api/stripe/create-portal, /api/stripe/webhook
-- [ ] Add Stripe checkout flow: user selects plan → redirects to Stripe → webhook updates subscription_tier
-- [ ] Add Customer Portal session: user clicks "Manage" → redirects to Stripe portal for cancel/upgrade
-- [ ] Create API route /api/stripe/webhook: handle subscription events
+- [x] Integrate Stripe: install @stripe/stripe-js, create API routes /api/stripe/create-checkout, /api/stripe/create-portal, /api/stripe/webhook
+- [x] Add Stripe checkout flow: user selects plan → redirects to Stripe → webhook updates subscription_tier
+- [x] Add Customer Portal session: user clicks "Manage" → redirects to Stripe portal for cancel/upgrade
+- [x] Create API route /api/stripe/webhook: handle subscription events
