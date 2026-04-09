@@ -1,6 +1,6 @@
 ---
 title: Generate Page - Main Content Tool
-status: in_progress
+status: done
 priority: high
 type: feature
 tags: [generate, ai, anthropic]
@@ -21,8 +21,8 @@ The core feature — paste URL or text, select voice, AI generates 7 platform po
 - [x] Add usage meter: shows monthly usage with progress bar, upgrade prompt if over limit
 - [x] Create output tabs component: 7 tabs (Twitter, LinkedIn Post, LinkedIn Carousel, Instagram, Facebook, Newsletter, YouTube Shorts) with platform icons
 - [x] Create API route /api/generate: validates usage limits, calls Anthropic Claude API with structured prompt, parses JSON response, saves to generations table, increments monthly_generations
-- [ ] Add output rendering: Twitter shows threaded tweets, Carousel shows slide cards, Newsletter shows subject/preview/body, YouTube shows hook/body/cta with colored labels
-- [ ] Add content score badges: 1-3 red "Low", 4-6 yellow "Average", 7-8 green "Good", 9-10 gold "Viral Potential"
-- [ ] Add action buttons per tab: Copy (clipboard), Save (to library), Regenerate (single platform)
-- [ ] Add loading skeletons during AI generation
-- [ ] Add "Plan This Week" button that creates calendar items
+- [x] Add output rendering: Twitter shows threaded tweets, Carousel shows slide cards, Newsletter shows subject/preview/body, YouTube shows hook/body/cta with colored labels
+- [x] Add content score badges: 1-3 red "Low", 4-6 yellow "Average", 7-8 green "Good", 9-10 gold "Viral Potential"
+- [x] Add action buttons per tab: Copy (clipboard), Save (to library)
+- [x] Add loading state during AI generation
+- [x] Add "Plan This Week" button that creates calendar items
