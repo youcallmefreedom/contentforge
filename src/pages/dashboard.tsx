@@ -220,8 +220,6 @@ export default function Dashboard() {
         steps={tourSteps}
         run={runTour}
         continuous
-        showSkipButton
-        showProgress
         callback={handleJoyrideCallback}
         styles={{
           options: {
