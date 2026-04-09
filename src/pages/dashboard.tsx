@@ -127,6 +127,34 @@ export default function Dashboard() {
     setRunTour(true);
   };
 
+  useEffect(() => {
+    if (!profile) return;
+    
+    const planLimits = {
+      free: 3,
+      starter: 30,
+      pro: 999999,
+      agency: 999999,
+    };
+    
+    const limit = planLimits[(profile as any).subscription_tier as keyof typeof planLimits] || 3;
+    const usage = (profile as any).monthly_generations || 0;
+    const usagePercent = limit === 999999 ? 0 : (usage / limit) * 100;
+
+    if (usagePercent >= 80) {
+      const hasShown = sessionStorage.getItem("usage_warning_shown");
+      if (!hasShown) {
+        setTimeout(() => {
+          toast({
+            title: "Approaching Usage Limit",
+            description: `You've used ${Math.round(usagePercent)}% of your monthly generations (${usage} of ${limit}).`,
+          });
+        }, 1000);
+        sessionStorage.setItem("usage_warning_shown", "true");
+      }
+    }
+  }, [profile, toast]);
+
   const fetchDashboardData = async () => {
     try {
       const { data: generations, error } = await supabase
@@ -201,7 +229,7 @@ export default function Dashboard() {
             textColor: "#0f172a",
             zIndex: 1000,
           },
-        }}
+        } as any}
       />
 
       <div className="container py-8 space-y-8 tour-welcome">
