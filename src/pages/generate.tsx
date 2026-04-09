@@ -57,17 +57,20 @@ type PlatformOutput = {
 };
 
 export default function Generate() {
-  const { user, profile } = useAuth();
   const router = useRouter();
+  const { user, profile, loading: authLoading } = useAuth();
   const { toast } = useToast();
+  
   const [inputMode, setInputMode] = useState<"url" | "text">("url");
   const [url, setUrl] = useState("");
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [voiceId, setVoiceId] = useState<string>("");
+  const [voiceId, setVoiceId] = useState("default");
+  const [voices, setVoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [outputs, setOutputs] = useState<PlatformOutput[]>([]);
-  const [generationId, setGenerationId] = useState<string>("");
+  const [activeTab, setActiveTab] = useState("twitter");
+  const [generationId, setGenerationId] = useState<string | null>(null);
 
   const planLimits = {
     free: 3,
@@ -81,30 +84,19 @@ export default function Generate() {
   const usagePercent = limit === 999999 ? 0 : (usage / limit) * 100;
 
   const handleGenerate = async () => {
-    if (!user) return;
-
-    if (usage >= limit) {
+    if (inputMode === "url" && !url.trim()) {
       toast({
-        title: "Usage Limit Reached",
-        description: "Upgrade your plan to continue generating content.",
+        title: "URL required",
+        description: "Please enter a blog URL to repurpose.",
         variant: "destructive",
       });
       return;
     }
 
-    if (inputMode === "url" && !url) {
+    if (inputMode === "text" && (!title.trim() || !content.trim())) {
       toast({
-        title: "URL Required",
-        description: "Please enter a blog post URL.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (inputMode === "text" && (!title || !content)) {
-      toast({
-        title: "Content Required",
-        description: "Please enter both title and content.",
+        title: "Content required",
+        description: "Please enter both a title and content to repurpose.",
         variant: "destructive",
       });
       return;
@@ -127,7 +119,7 @@ export default function Generate() {
           url,
           title,
           content,
-          voiceId: voiceId || null,
+          voiceId: voiceId === "default" ? null : voiceId,
         }),
       });
 
@@ -423,13 +415,18 @@ export default function Generate() {
 
                 {/* Brand Voice Selector */}
                 <div className="space-y-2">
-                  <Label>Brand Voice (Optional)</Label>
-                  <Select value={voiceId} onValueChange={setVoiceId} disabled={loading}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Default voice" />
+                  <Label htmlFor="voice">Brand Voice</Label>
+                  <Select value={voiceId} onValueChange={setVoiceId}>
+                    <SelectTrigger id="voice">
+                      <SelectValue placeholder="Select a voice" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Default voice</SelectItem>
+                      <SelectItem value="default">Default Voice</SelectItem>
+                      {voices.map((voice) => (
+                        <SelectItem key={voice.id} value={voice.id}>
+                          {voice.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
