@@ -1,12 +1,31 @@
-import React from 'react'
+import { SEO } from "@/components/SEO";
+import { Hero } from "@/components/landing/Hero";
+import { HowItWorks } from "@/components/landing/HowItWorks";
+import { PlatformShowcase } from "@/components/landing/PlatformShowcase";
+import { Features } from "@/components/landing/Features";
+import { Pricing } from "@/components/landing/Pricing";
+import { FAQ } from "@/components/landing/FAQ";
+import { FinalCTA } from "@/components/landing/FinalCTA";
+import { Footer } from "@/components/Footer";
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-background flex items-center justify-center">
-      <div className="text-center space-y-4">
-        <h1 className="text-4xl font-bold text-foreground">Hello World</h1>
-        <p className="text-lg text-muted-foreground">This is going to be your softgen app, start by describing your project.</p>
-      </div>
-    </main>
-  )
+    <>
+      <SEO
+        title="ContentForge - Turn One Blog Post Into a Week of Content"
+        description="AI-powered content repurposing tool. Generate platform-optimized social media posts for Twitter, LinkedIn, Instagram, Facebook, Newsletter, and YouTube from a single blog post."
+        image="/og-image.png"
+      />
+      <main className="min-h-screen">
+        <Hero />
+        <HowItWorks />
+        <PlatformShowcase />
+        <Features />
+        <Pricing />
+        <FAQ />
+        <FinalCTA />
+        <Footer />
+      </main>
+    </>
+  );
 }
