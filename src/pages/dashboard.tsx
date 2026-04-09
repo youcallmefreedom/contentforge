@@ -58,7 +58,7 @@ export default function Dashboard() {
       .limit(5);
 
     if (generations) {
-      setRecentGenerations(generations);
+      setRecentGenerations(generations as unknown as GenerationSummary[]);
 
       const total = generations.length;
       const thisMonth = generations.filter((g) => {
@@ -89,8 +89,8 @@ export default function Dashboard() {
     agency: 999999,
   };
 
-  const limit = planLimits[profile.subscription_tier as keyof typeof planLimits] || 3;
-  const usage = profile.monthly_generations || 0;
+  const limit = planLimits[(profile as any).subscription_tier as keyof typeof planLimits] || 3;
+  const usage = (profile as any).monthly_generations || 0;
   const usagePercent = limit === 999999 ? 0 : (usage / limit) * 100;
 
   return (
@@ -157,7 +157,7 @@ export default function Dashboard() {
                   {usage} of {limit === 999999 ? "unlimited" : limit} repurposes
                 </p>
               </div>
-              {profile.subscription_tier === "free" && usage >= limit && (
+              {(profile as any).subscription_tier === "free" && usage >= limit && (
                 <Link href="/settings">
                   <Button variant="outline" size="sm">
                     Upgrade Plan

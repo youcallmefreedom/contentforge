@@ -115,9 +115,9 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <p className="text-sm font-medium truncate">{profile?.full_name || "User"}</p>
                 <Badge
                   variant="secondary"
-                  className={`text-xs ${tierColors[profile?.subscription_tier as keyof typeof tierColors] || tierColors.free}`}
+                  className={`text-xs ${tierColors[(profile as any)?.subscription_tier as keyof typeof tierColors] || tierColors.free}`}
                 >
-                  {profile?.subscription_tier?.toUpperCase() || "FREE"}
+                  {((profile as any)?.subscription_tier as string)?.toUpperCase() || "FREE"}
                 </Badge>
               </div>
             </div>
