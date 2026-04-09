@@ -217,17 +217,19 @@ export default function Dashboard() {
       <SEO title="Dashboard — ContentForge" />
       
       <Joyride
-        steps={tourSteps}
-        run={runTour}
-        continuous
-        callback={handleJoyrideCallback}
-        styles={{
-          options: {
-            primaryColor: "#0d9488",
-            textColor: "#0f172a",
-            zIndex: 1000,
+        {...({
+          steps: tourSteps,
+          run: runTour,
+          continuous: true,
+          callback: handleJoyrideCallback,
+          styles: {
+            options: {
+              primaryColor: "#0d9488",
+              textColor: "#0f172a",
+              zIndex: 1000,
+            },
           },
-        } as any}
+        } as any)}
       />
 
       <div className="container py-8 space-y-8 tour-welcome">
