@@ -196,18 +196,10 @@ export default function Dashboard() {
         showProgress
         callback={handleJoyrideCallback}
         styles={{
-          tooltip: {
-            fontSize: 16,
-            padding: 20,
-          },
-          buttonNext: {
-            backgroundColor: "#0d9488",
-            fontSize: 14,
-            padding: "8px 16px",
-          },
-          buttonBack: {
-            color: "#64748b",
-            fontSize: 14,
+          options: {
+            primaryColor: "#0d9488",
+            textColor: "#0f172a",
+            zIndex: 1000,
           },
         }}
       />
