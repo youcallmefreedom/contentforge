@@ -1,6 +1,6 @@
 ---
 title: Landing Page & Marketing Site
-status: in_progress
+status: done
 priority: urgent
 type: feature
 tags: [marketing, landing, pricing]
@@ -20,4 +20,4 @@ Public marketing pages to convert visitors into signups. Hero section must grab 
 - [x] Create Pricing section: 4 plan cards (Free, Starter, Pro with "Most Popular" badge, Agency) with feature lists and CTAs
 - [x] Create FAQ section: 6 expandable questions about features, pricing, refunds, data security
 - [x] Create Footer component: Bengal Innovative Limited © 2026, product links, company info, legal
-- [ ] Create /pricing page: detailed pricing with annual/monthly toggle and comparison table
+- [x] Create /pricing page: detailed pricing with annual/monthly toggle and comparison table
