@@ -6,7 +6,8 @@ let Anthropic: any;
 let anthropic: any;
 
 try {
-  Anthropic = require("@anthropic-ai/sdk");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  Anthropic = require("@anthropic-ai/sdk").default || require("@anthropic-ai/sdk");
   anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY || "",
   });
