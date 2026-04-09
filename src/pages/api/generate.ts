@@ -24,20 +24,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
-      return res.status(401).json({ error: "Unauthorized" });
+      return res.status(401).json({ error: "Invalid token" });
     }
 
-    // Check usage limits
-    const { data: profile } = await supabase
+    // Get or create user profile
+    let { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("subscription_tier, monthly_generations")
       .eq("id", user.id)
       .single();
 
-    if (!profile) {
-      return res.status(404).json({ error: "Profile not found" });
+    // Fallback: Create profile if it doesn't exist
+    if (profileError || !profile) {
+      const { data: newProfile, error: createError } = await supabase
+        .from("profiles")
+        .insert({
+          id: user.id,
+          email: user.email,
+          full_name: user.user_metadata?.full_name || "",
+          subscription_tier: "free",
+          subscription_status: "active",
+          monthly_generations: 0,
+          usage_reset_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        })
+        .select("subscription_tier, monthly_generations")
+        .single();
+
+      if (createError || !newProfile) {
+        console.error("Failed to create profile:", createError);
+        return res.status(500).json({ error: "Failed to create user profile" });
+      }
+
+      profile = newProfile;
     }
 
+    // Check usage limits
     const limits: Record<string, number> = {
       free: 3,
       starter: 30,
