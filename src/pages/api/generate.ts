@@ -1,20 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/lib/supabase";
+import Anthropic from "@anthropic-ai/sdk";
 
-// Import Anthropic with error handling
-let Anthropic: any;
-let anthropic: any;
-
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  Anthropic = require("@anthropic-ai/sdk").default || require("@anthropic-ai/sdk");
-  anthropic = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY || "",
-  });
-  console.log("✅ Anthropic SDK loaded successfully");
-} catch (error: any) {
-  console.error("❌ Failed to load Anthropic SDK:", error.message);
-}
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY || "",
+});
 
 // Strip all HTML tags and return plain text
 function stripHtml(html: string): string {
@@ -61,27 +51,28 @@ async function retryWithBackoff<T>(
   throw lastError;
 }
 
-// Main handler wrapped in safety catch
-async function generateHandler(
+// Main API handler
+export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  console.log("=== GENERATE API HANDLER STARTED ===");
-  
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
-  // Check if Anthropic SDK loaded
-  if (!anthropic) {
-    console.error("Anthropic SDK not initialized");
-    return res.status(500).json({ 
-      error: "AI service unavailable",
-      details: "Anthropic SDK failed to load"
-    });
-  }
-
+  // Wrap EVERYTHING in try-catch to guarantee JSON responses
   try {
+    console.log("=== GENERATE API HANDLER STARTED ===");
+    
+    if (req.method !== "POST") {
+      return res.status(405).json({ error: "Method not allowed" });
+    }
+
+    // Check if Anthropic SDK loaded
+    if (!anthropic) {
+      console.error("Anthropic SDK not initialized");
+      return res.status(500).json({ 
+        error: "AI service unavailable",
+        details: "Anthropic SDK failed to load"
+      });
+    }
+
     console.log("Request body:", JSON.stringify(req.body, null, 2));
 
     const { inputMode, url, title, content, voiceId } = req.body;
@@ -397,32 +388,15 @@ Generate all 7 platform-specific posts from this content. Return only the JSON a
     });
   } catch (error: any) {
     console.error("=== GENERATE API ERROR ===");
-    console.error("Error type:", error.constructor.name);
+    console.error("Error type:", error.constructor?.name || "Unknown");
     console.error("Error message:", error.message);
     console.error("Error stack:", error.stack);
 
+    // ALWAYS return JSON, never HTML
     return res.status(500).json({
       error: error.message || "Generation failed",
-      type: error.constructor.name,
+      type: error.constructor?.name || "Error",
       details: process.env.NODE_ENV === "development" ? error.stack : undefined,
-    });
-  }
-}
-
-// Export with top-level try-catch
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  try {
-    return await generateHandler(req, res);
-  } catch (error: any) {
-    console.error("=== TOP-LEVEL ERROR CAUGHT ===");
-    console.error(error);
-    return res.status(500).json({
-      error: "Internal server error",
-      message: error.message,
-      stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
     });
   }
 }
