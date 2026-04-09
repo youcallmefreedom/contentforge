@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import { SEO } from "@/components/SEO";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -24,7 +24,7 @@ import {
   Clock,
   HelpCircle
 } from "lucide-react";
-import Joyride, { CallBackProps, STATUS, Step } from "react-joyride";
+import { Joyride, STATUS, Step } from "react-joyride";
 
 type GenerationSummary = {
   id: string;
@@ -67,34 +67,28 @@ export default function Dashboard() {
   const [runTour, setRunTour] = useState(false);
   const [tourCompleted, setTourCompleted] = useState(false);
 
-  const tourSteps: Step[] = [
-    {
-      target: ".tour-welcome",
-      content: "Welcome to ContentForge! Let's take a quick tour of your dashboard.",
-      placement: "center",
-      disableBeacon: true,
-    },
+  const [tourSteps] = useState<Step[]>([
     {
       target: ".tour-stats",
-      content: "Track your content performance here. See total generations, average engagement scores, and this month's activity.",
+      content: "These cards show your overall repurposing performance and usage for the current billing cycle.",
       placement: "bottom",
     },
     {
       target: ".tour-usage",
-      content: "Monitor your monthly usage. Upgrade your plan if you need more repurposes.",
-      placement: "bottom",
+      content: "Keep track of your monthly generations here. You can upgrade your plan if you need more.",
+      placement: "left",
     },
     {
       target: ".tour-quick-actions",
-      content: "Quick access to key features: Generate new content, view your calendar, or browse your saved library.",
-      placement: "bottom",
+      content: "Use these shortcuts to start a new generation, check your calendar, or browse your library.",
+      placement: "top",
     },
     {
       target: ".tour-recent",
-      content: "Your recent generations appear here. Click any item to view the full repurposed content.",
+      content: "Your most recent repurposed content will appear here for quick access.",
       placement: "top",
-    },
-  ];
+    }
+  ]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -118,7 +112,7 @@ export default function Dashboard() {
     }
   };
 
-  const handleJoyrideCallback = (data: CallBackProps) => {
+  const handleJoyrideCallback = (data: any) => {
     const { status } = data;
     const finishedStatuses: string[] = [STATUS.FINISHED, STATUS.SKIPPED];
 
