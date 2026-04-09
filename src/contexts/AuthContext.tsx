@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { User } from "@supabase/supabase-js";
-import { supabase, Profile } from "@/lib/supabase";
+import { supabase } from "@/integrations/supabase/client";
+import { authService, Profile } from "@/services/authService";
 import { useRouter } from "next/router";
 
 type AuthContextType = {
@@ -22,7 +23,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    authService.getSession().then(({ session }) => {
       setUser(session?.user ?? null);
       if (session?.user) {
         fetchProfile(session.user.id);
@@ -45,11 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const fetchProfile = async (userId: string) => {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .single();
+    const { data, error } = await authService.getProfile(userId);
 
     if (error) {
       console.error("Error fetching profile:", error);
@@ -61,29 +58,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signUp = async (email: string, password: string, fullName: string) => {
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { full_name: fullName },
-        },
-      });
-
+      const { error } = await authService.signUp(email, password, fullName);
       if (error) return { error };
-
-      if (data.user) {
-        const { error: profileError } = await supabase.from("profiles").insert({
-          id: data.user.id,
-          email,
-          full_name: fullName,
-          subscription_tier: "free",
-          monthly_generations: 0,
-          usage_reset_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        });
-
-        if (profileError) return { error: profileError };
-      }
-
       return { error: null };
     } catch (error) {
       return { error: error as Error };
@@ -92,7 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await authService.signIn(email, password);
       if (error) return { error };
       router.push("/dashboard");
       return { error: null };
@@ -102,15 +78,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    await authService.signOut();
     router.push("/");
   };
 
   const resetPassword = async (email: string) => {
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
+      const { error } = await authService.resetPassword(email);
       return { error };
     } catch (error) {
       return { error: error as Error };

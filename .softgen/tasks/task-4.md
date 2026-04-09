@@ -1,21 +1,18 @@
 ---
 title: Dashboard & App Layout
-status: todo
+status: in_progress
 priority: high
 type: feature
-tags: [dashboard, navigation, layout]
+tags: [dashboard, layout, sidebar]
 created_by: agent
 created_at: 2026-04-09T11:43:29Z
 position: 4
 ---
 
 ## Notes
-Protected app layout with sidebar navigation. Dashboard shows greeting, usage stats, recent generations, quick action cards. Sidebar 260px, collapsible on mobile, with user profile at bottom.
+Protected app pages with sidebar navigation. Dashboard shows overview stats, usage meter, recent generations, and quick action cards.
 
 ## Checklist
-- [ ] Create AppLayout component: sidebar + main content area, responsive collapse
-- [ ] Create Sidebar component: ContentForge logo, navigation links (Dashboard, Generate, Calendar, Library, Brand Voices, RSS Feeds, Settings), user avatar + name + plan badge, sign out button
-- [ ] Create /dashboard page: greeting with user's name, stats cards (generations this month, saved posts, active voices, calendar items), recent generations list (last 5), quick action buttons (New Generation, View Calendar, Train Voice)
-- [ ] Create StatsCard component: icon, number, label, trend indicator
-- [ ] Create RecentGenerationItem component: title, date, platform badges, view button
+- [x] Create AppLayout component: sidebar with logo, nav links (Dashboard, Generate, Calendar, Library, Voices, Feeds, Settings), user avatar + plan badge, sign out button
+- [x] Create /dashboard page: greeting with user's first name, 3 stats cards (total generations, avg score, this month), usage meter with progress bar, 3 quick action cards (New Repurpose → /generate, Content Calendar → /calendar, Saved Library → /library), recent generations list with platform badges, view button
 - [ ] Create API route /api/dashboard-stats: fetch user's usage data
