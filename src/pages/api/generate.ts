@@ -28,11 +28,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Get or create user profile
-    let { data: profile, error: profileError } = await supabase
+    const { data: existingProfile, error: profileError } = await supabase
       .from("profiles")
       .select("subscription_tier, monthly_generations")
       .eq("id", user.id)
       .single();
+
+    let profile = existingProfile;
 
     // Fallback: Create profile if it doesn't exist
     if (profileError || !profile) {

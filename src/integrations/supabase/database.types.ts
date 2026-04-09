@@ -183,7 +183,12 @@ export type Database = {
           email: string | null
           full_name: string | null
           id: string
+          monthly_generations: number | null
+          stripe_customer_id: string | null
+          subscription_status: string | null
+          subscription_tier: string | null
           updated_at: string | null
+          usage_reset_date: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -191,7 +196,12 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id: string
+          monthly_generations?: number | null
+          stripe_customer_id?: string | null
+          subscription_status?: string | null
+          subscription_tier?: string | null
           updated_at?: string | null
+          usage_reset_date?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -199,7 +209,12 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id?: string
+          monthly_generations?: number | null
+          stripe_customer_id?: string | null
+          subscription_status?: string | null
+          subscription_tier?: string | null
           updated_at?: string | null
+          usage_reset_date?: string | null
         }
         Relationships: []
       }
