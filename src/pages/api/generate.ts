@@ -1,116 +1,171 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { supabase } from "@/lib/supabase";
-import Anthropic from "@anthropic-ai/sdk";
+import { createClient } from "@supabase/supabase-js";
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || "",
-});
+// Create a server-side Supabase client with service role key (bypasses RLS)
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+);
 
-// Strip all HTML tags and return plain text
+// Create a client-side Supabase client for auth verification
+const supabaseAuth = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+);
+
 function stripHtml(html: string): string {
   return html
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "") // Remove scripts
-    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "") // Remove styles
-    .replace(/<[^>]+>/g, "") // Remove all HTML tags
-    .replace(/&nbsp;/g, " ") // Replace &nbsp;
-    .replace(/&amp;/g, "&") // Replace &amp;
-    .replace(/&lt;/g, "<") // Replace &lt;
-    .replace(/&gt;/g, ">") // Replace &gt;
-    .replace(/&quot;/g, '"') // Replace &quot;
-    .replace(/&#39;/g, "'") // Replace &#39;
-    .replace(/\s+/g, " ") // Normalize whitespace
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
-// Retry helper for 529 overloaded errors
-async function retryWithBackoff<T>(
-  fn: () => Promise<T>,
-  maxRetries = 3,
-  delayMs = 5000
-): Promise<T> {
-  let lastError: any;
+async function callAnthropicAPI(systemPrompt: string, userPrompt: string): Promise<any> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+  if (!apiKey) {
+    throw new Error("ANTHROPIC_API_KEY is not set");
+  }
+
+  let lastError: any = null;
+
+  // Retry up to 3 times for 529 errors
+  for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      return await fn();
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 4000,
+          system: systemPrompt,
+          messages: [
+            {
+              role: "user",
+              content: userPrompt,
+            },
+          ],
+        }),
+      });
+
+      if (response.status === 529) {
+        console.log(`Anthropic API overloaded (529), attempt ${attempt}/3`);
+        lastError = new Error("Anthropic API overloaded");
+        if (attempt < 3) {
+          await new Promise((r) => setTimeout(r, 5000));
+          continue;
+        }
+        throw lastError;
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Anthropic API error ${response.status}:`, errorText);
+        throw new Error(`Anthropic API error: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
     } catch (error: any) {
       lastError = error;
-      
-      // Check if it's a 529 overloaded error
-      if (error.status === 529 && attempt < maxRetries) {
-        console.log(`Anthropic API overloaded (529), retrying in ${delayMs}ms... (attempt ${attempt}/${maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, delayMs));
+      if (attempt < 3 && error.message?.includes("overloaded")) {
+        await new Promise((r) => setTimeout(r, 5000));
         continue;
       }
-      
-      // For non-529 errors or last attempt, throw immediately
       throw error;
     }
   }
-  
+
   throw lastError;
 }
 
-// Main API handler
+async function fetchUrlContent(url: string): Promise<{ title: string; content: string }> {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; ContentForge/1.0)",
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch URL: ${response.status}`);
+    }
+
+    const html = await response.text();
+    
+    // Extract title
+    const titleMatch = html.match(/<title[^>]*>(.*?)<\/title>/i);
+    const h1Match = html.match(/<h1[^>]*>(.*?)<\/h1>/i);
+    const title = stripHtml(titleMatch?.[1] || h1Match?.[1] || "Untitled");
+
+    // Extract main content
+    const articleMatch = html.match(/<article[^>]*>([\s\S]*?)<\/article>/i);
+    const mainMatch = html.match(/<main[^>]*>([\s\S]*?)<\/main>/i);
+    const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    
+    const rawContent = articleMatch?.[1] || mainMatch?.[1] || bodyMatch?.[1] || html;
+    const content = stripHtml(rawContent);
+
+    // Truncate to ~5000 words max
+    const words = content.split(/\s+/).slice(0, 5000).join(" ");
+
+    return { title, content: words };
+  } catch (error: any) {
+    console.error("URL fetch error:", error.message);
+    throw new Error(`Could not fetch content from URL: ${error.message}`);
+  }
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  // Wrap EVERYTHING in try-catch to guarantee JSON responses
+  // ALWAYS return JSON - wrap everything in try-catch
   try {
-    console.log("=== GENERATE API HANDLER STARTED ===");
-    
     if (req.method !== "POST") {
       return res.status(405).json({ error: "Method not allowed" });
     }
 
-    // Check if Anthropic SDK loaded
-    if (!anthropic) {
-      console.error("Anthropic SDK not initialized");
-      return res.status(500).json({ 
-        error: "AI service unavailable",
-        details: "Anthropic SDK failed to load"
-      });
-    }
-
-    console.log("Request body:", JSON.stringify(req.body, null, 2));
-
     const { inputMode, url, title, content, voiceId } = req.body;
 
-    // Get user from session
+    // Authenticate user
     const authHeader = req.headers.authorization;
     if (!authHeader) {
-      console.log("ERROR: No authorization header");
-      return res.status(401).json({ error: "Unauthorized" });
+      return res.status(401).json({ error: "Unauthorized - no auth header" });
     }
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
 
     if (authError || !user) {
-      console.log("ERROR: Invalid token or user not found");
-      return res.status(401).json({ error: "Invalid token" });
+      return res.status(401).json({ error: "Invalid authentication token" });
     }
 
-    console.log("User authenticated:", user.id);
-
-    // Get or create user profile
-    const { data: existingProfile, error: profileError } = await supabase
+    // Get or create profile using admin client (bypasses RLS)
+    let { data: profile, error: profileError } = await supabaseAdmin
       .from("profiles")
       .select("subscription_tier, monthly_generations")
       .eq("id", user.id)
       .single();
 
-    let profile = existingProfile;
-
-    // Fallback: Create profile if it doesn't exist
     if (profileError || !profile) {
-      console.log("Profile not found, creating new profile...");
-      const { data: newProfile, error: createError } = await supabase
+      const { data: newProfile, error: createError } = await supabaseAdmin
         .from("profiles")
         .insert({
           id: user.id,
-          email: user.email,
+          email: user.email || "",
           full_name: user.user_metadata?.full_name || "",
           subscription_tier: "free",
           subscription_status: "active",
@@ -121,237 +176,98 @@ export default async function handler(
         .single();
 
       if (createError || !newProfile) {
-        console.error("Failed to create profile:", createError);
         return res.status(500).json({ error: "Failed to create user profile" });
       }
-
       profile = newProfile;
-      console.log("Profile created successfully");
     }
-
-    console.log("Profile loaded:", profile);
 
     // Check usage limits
-    const limits: Record<string, number> = {
-      free: 3,
-      starter: 30,
-      pro: 999999,
-      agency: 999999,
-    };
-
+    const limits: Record<string, number> = { free: 3, starter: 30, pro: 999999, agency: 999999 };
     const limit = limits[profile.subscription_tier] || 3;
+    
     if (profile.monthly_generations >= limit) {
-      console.log("ERROR: Usage limit reached");
-      return res.status(403).json({ error: "Usage limit reached" });
+      return res.status(403).json({ error: "Monthly usage limit reached. Please upgrade your plan." });
     }
 
-    // Fetch URL content if needed
-    let inputTitle = title;
-    let inputContent = content;
+    // Get content
+    let inputTitle = title || "";
+    let inputContent = content || "";
 
     if (inputMode === "url") {
-      console.log("URL mode - using mock data for now");
-      // In production, use a proper web scraping service
-      // For now, return mock data
-      inputTitle = "Sample Blog Post Title";
-      inputContent = "Sample blog post content would be extracted here...";
+      if (!url) {
+        return res.status(400).json({ error: "URL is required" });
+      }
+      const fetched = await fetchUrlContent(url);
+      inputTitle = fetched.title;
+      inputContent = fetched.content;
     } else {
-      // Text mode - strip HTML from user input
-      console.log("Text mode - stripping HTML from user input");
-      inputTitle = stripHtml(title || "");
-      inputContent = stripHtml(content || "");
-      console.log("Stripped title:", inputTitle.substring(0, 100));
-      console.log("Stripped content length:", inputContent.length);
-      console.log("Stripped content preview:", inputContent.substring(0, 200));
+      inputTitle = stripHtml(inputTitle);
+      inputContent = stripHtml(inputContent);
     }
 
-    // Validate content length
     if (!inputContent || inputContent.length < 50) {
-      console.log("ERROR: Content too short");
-      return res.status(400).json({ error: "Content must be at least 50 characters" });
+      return res.status(400).json({ error: "Content must be at least 50 characters long" });
     }
 
-    // Build AI prompt
-    const systemPrompt = `You are ContentForge AI, an expert at repurposing blog content into platform-specific social media posts.
+    // Build prompts
+    const systemPrompt = `You are ContentForge AI, an expert content repurposer. Generate 7 platform-optimized social media posts from blog content.
 
-Your task: Generate 7 platform-optimized posts from the given blog content.
+IMPORTANT: Return ONLY a valid JSON array. No markdown, no code fences, no explanation text. Just the raw JSON array.
 
-PLATFORM RULES:
+Platform rules:
+1. TWITTER THREAD: 3-5 tweets, each under 280 chars. Tweet 1=hook. Last tweet=CTA. Max 2 hashtags on last tweet.
+2. LINKEDIN POST: ~1300 chars. First 210 chars=hook. Single-line paragraphs. End with question. 3-5 hashtags at end.
+3. LINKEDIN CAROUSEL: 8-12 slides. Slide 1=cover+"Swipe". Each slide: headline (max 6 words) + body (max 25 words). Last=CTA.
+4. INSTAGRAM CAPTION: 300-500 chars. Storytelling tone. 2-4 emojis. 20-30 hashtags in separate block. End with question.
+5. FACEBOOK POST: 400-600 chars. Conversational. Include question. 1-2 emojis. NO hashtags.
+6. NEWSLETTER: Subject line (max 50 chars). Preview text (max 90 chars). 3 takeaway bullets. Brief intro. CTA.
+7. YOUTUBE SHORTS SCRIPT: 45-60 sec spoken. HOOK (0-5s), BODY (5-45s), CTA (45-60s). No greetings. Visual cues.
 
-1. TWITTER THREAD (3-5 tweets, each under 280 chars):
-- Tweet 1 = hook (question/bold claim/stat)
-- Last tweet = CTA + "Follow for more"
-- Max 2 hashtags on last tweet only
-- Use line breaks for readability
+For each output include content_score (1-10) and score_reason (one sentence).
 
-2. LINKEDIN POST (1,300 chars optimal):
-- First 210 chars = hook (shows before "see more")
-- Single-line paragraphs with empty lines
-- End with engagement question
-- 3-5 hashtags at end
+Return this exact JSON structure:
+[{"platform":"twitter","format":"thread","content":"...","tweets":["...","..."],"char_count":0,"hashtags":[],"content_score":7,"score_reason":"..."},{"platform":"linkedin","format":"post","content":"...","char_count":0,"hashtags":[],"content_score":7,"score_reason":"..."},{"platform":"linkedin_carousel","format":"carousel","slides":[{"slide_number":1,"headline":"...","body":"..."}],"content_score":7,"score_reason":"..."},{"platform":"instagram","format":"caption","content":"...","char_count":0,"hashtags":[],"content_score":7,"score_reason":"..."},{"platform":"facebook","format":"post","content":"...","char_count":0,"content_score":7,"score_reason":"..."},{"platform":"newsletter","format":"email","subject_line":"...","preview_text":"...","content":"...","content_score":7,"score_reason":"..."},{"platform":"youtube_shorts","format":"script","hook":"...","body":"...","cta":"...","content_score":7,"score_reason":"..."}]`;
 
-3. LINKEDIN CAROUSEL (8-12 slides):
-- Slide 1 = Cover title + "Swipe →"
-- Slide 2 = Problem/question
-- Each slide: headline (max 6 words) + body (max 25 words)
-- Last slide = CTA + "Follow for more"
+    const userPrompt = `Blog Title: ${inputTitle}\n\nBlog Content:\n${inputContent.substring(0, 8000)}\n\nGenerate all 7 platform posts. Return ONLY the JSON array, nothing else.`;
 
-4. INSTAGRAM CAPTION (300-500 chars before fold):
-- Storytelling/conversational tone
-- 2-4 contextual emojis
-- 20-30 hashtags in separate block at end
-- End with question or "Save this"
+    // Call Anthropic API using raw fetch (no SDK dependency)
+    const apiResponse = await callAnthropicAPI(systemPrompt, userPrompt);
 
-5. FACEBOOK POST (400-600 chars):
-- Conversational, like talking to friend
-- Include engagement question
-- 1-2 emojis max
-- NO hashtags
+    const aiText = apiResponse.content?.[0]?.type === "text" 
+      ? apiResponse.content[0].text 
+      : "";
 
-6. NEWSLETTER:
-- Subject line: max 50 chars, curiosity-driven
-- Preview text: max 90 chars
-- 3 key takeaways as bullets
-- Brief intro (2-3 sentences)
-- CTA: "Read the full post →"
+    if (!aiText) {
+      return res.status(500).json({ error: "Empty response from AI" });
+    }
 
-7. YOUTUBE SHORTS SCRIPT (45-60 seconds spoken):
-- HOOK (0-5 sec): Grab attention, no greetings
-- BODY (5-45 sec): Main insight, simple language
-- CTA (45-60 sec): Subscribe + comment prompt
-- Include visual cues
-
-For EACH platform, also provide:
-- content_score (1-10): predicted engagement score
-- score_reason: one sentence explaining the score
-
-Return a JSON array of 7 objects with this exact structure:
-[
-  {
-    "platform": "twitter",
-    "format": "thread",
-    "content": "Full content here",
-    "tweets": ["Tweet 1", "Tweet 2", "Tweet 3"],
-    "char_count": 840,
-    "hashtags": ["#tag1", "#tag2"],
-    "content_score": 7,
-    "score_reason": "Strong hook with data point"
-  },
-  {
-    "platform": "linkedin",
-    "format": "post",
-    "content": "Full post text...",
-    "char_count": 1200,
-    "hashtags": ["#tag1", "#tag2"],
-    "content_score": 8,
-    "score_reason": "Pattern interrupt opening"
-  },
-  {
-    "platform": "linkedin_carousel",
-    "format": "carousel",
-    "slides": [
-      {"slide_number": 1, "headline": "5 Productivity Hacks", "body": "That saved me 10 hours/week → Swipe"},
-      {"slide_number": 2, "headline": "The Problem", "body": "We waste 40% of our workday"}
-    ],
-    "content_score": 9,
-    "score_reason": "Carousels get 3x more reach"
-  },
-  {
-    "platform": "instagram",
-    "format": "caption",
-    "content": "Caption text...",
-    "char_count": 400,
-    "hashtags": ["#tag1", "#tag2", ...],
-    "content_score": 6,
-    "score_reason": "Good storytelling"
-  },
-  {
-    "platform": "facebook",
-    "format": "post",
-    "content": "Post text...",
-    "char_count": 500,
-    "content_score": 7,
-    "score_reason": "Conversational tone"
-  },
-  {
-    "platform": "newsletter",
-    "format": "email",
-    "subject_line": "Subject here",
-    "preview_text": "Preview here",
-    "content": "Body with takeaways",
-    "content_score": 8,
-    "score_reason": "Curiosity-driven subject"
-  },
-  {
-    "platform": "youtube_shorts",
-    "format": "script",
-    "hook": "Opening line",
-    "body": "Main content",
-    "cta": "Call to action",
-    "content_score": 7,
-    "score_reason": "Strong hook"
-  }
-]`;
-
-    const userPrompt = `Blog Post Title: ${inputTitle}
-
-Blog Post Content:
-${inputContent}
-
-Generate all 7 platform-specific posts from this content. Return only the JSON array, no other text.`;
-
-    console.log("=== SENDING TO ANTHROPIC API ===");
-    console.log("Model: claude-sonnet-4-20250514");
-    console.log("Max tokens: 4000");
-    console.log("System prompt length:", systemPrompt.length);
-    console.log("User prompt length:", userPrompt.length);
-    console.log("User prompt preview:", userPrompt.substring(0, 300));
-
-    // Call Anthropic API with retry logic
-    const response = await retryWithBackoff(async () => {
-      return await anthropic.messages.create({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 4000,
-        system: systemPrompt,
-        messages: [
-          {
-            role: "user",
-            content: userPrompt,
-          },
-        ],
-      });
-    });
-
-    console.log("=== ANTHROPIC API RESPONSE ===");
-    console.log("Model:", response.model);
-    console.log("Usage:", response.usage);
-    console.log("Content type:", response.content[0].type);
-
-    const aiResponse = response.content[0].type === "text" ? response.content[0].text : "";
-    console.log("AI response length:", aiResponse.length);
-    console.log("AI response preview:", aiResponse.substring(0, 500));
-    
-    // Parse JSON response
+    // Parse JSON from response
     let outputs = [];
     try {
-      const jsonMatch = aiResponse.match(/\[[\s\S]*\]/);
+      // Try to find JSON array in the response
+      const cleaned = aiText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+      const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         outputs = JSON.parse(jsonMatch[0]);
-        console.log("Successfully parsed", outputs.length, "platform outputs");
       } else {
-        console.log("ERROR: No JSON array found in AI response");
-        console.log("Full AI response:", aiResponse);
-        return res.status(500).json({ error: "Failed to parse AI response - no JSON array found" });
+        // Try parsing the entire response as JSON
+        outputs = JSON.parse(cleaned);
       }
     } catch (parseError: any) {
-      console.error("JSON parse error:", parseError);
-      console.log("Failed to parse AI response:", aiResponse.substring(0, 1000));
-      return res.status(500).json({ error: "Failed to parse AI response" });
+      console.error("JSON parse error:", parseError.message);
+      console.error("AI response preview:", aiText.substring(0, 500));
+      return res.status(500).json({ 
+        error: "Failed to parse AI response. Please try again.",
+        preview: aiText.substring(0, 200)
+      });
     }
 
-    // Save generation to database
-    console.log("Saving generation to database...");
-    const { data: generation, error: saveError } = await supabase
+    if (!Array.isArray(outputs) || outputs.length === 0) {
+      return res.status(500).json({ error: "AI returned invalid output format. Please try again." });
+    }
+
+    // Save generation to database using admin client
+    const { data: generation, error: saveError } = await supabaseAdmin
       .from("generations")
       .insert({
         user_id: user.id,
@@ -359,44 +275,38 @@ Generate all 7 platform-specific posts from this content. Return only the JSON a
         input_type: inputMode,
         input_url: url || null,
         input_title: inputTitle,
-        input_content: inputContent,
+        input_content: inputContent.substring(0, 50000),
         input_word_count: inputContent.split(/\s+/).length,
         outputs: outputs,
-        tokens_used: response.usage.input_tokens + response.usage.output_tokens,
+        tokens_used: (apiResponse.usage?.input_tokens || 0) + (apiResponse.usage?.output_tokens || 0),
         is_evergreen: false,
       })
-      .select()
+      .select("id")
       .single();
 
     if (saveError) {
       console.error("Database save error:", saveError);
-    } else {
-      console.log("Generation saved with ID:", generation?.id);
+      // Don't fail the request - still return the outputs
     }
 
     // Increment usage counter
-    console.log("Incrementing usage counter...");
-    await supabase
+    await supabaseAdmin
       .from("profiles")
-      .update({ monthly_generations: profile.monthly_generations + 1 })
+      .update({ monthly_generations: (profile.monthly_generations || 0) + 1 })
       .eq("id", user.id);
 
-    console.log("=== GENERATION COMPLETE ===");
+    // Return successful response
     return res.status(200).json({
       outputs,
       generationId: generation?.id || "",
     });
-  } catch (error: any) {
-    console.error("=== GENERATE API ERROR ===");
-    console.error("Error type:", error.constructor?.name || "Unknown");
-    console.error("Error message:", error.message);
-    console.error("Error stack:", error.stack);
 
-    // ALWAYS return JSON, never HTML
+  } catch (error: any) {
+    console.error("Generate API error:", error.message || error);
+    
+    // ALWAYS return JSON
     return res.status(500).json({
-      error: error.message || "Generation failed",
-      type: error.constructor?.name || "Error",
-      details: process.env.NODE_ENV === "development" ? error.stack : undefined,
+      error: error.message || "Generation failed. Please try again.",
     });
   }
 }
